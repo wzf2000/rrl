@@ -1,0 +1,21 @@
+# raw data
+*.data
+*.info
+*.csv
+*.names
+
+# logs
+*.log
+*.pkl
+*.pickle
+
+
+# uncompressed dataset files
+*.tar.gz
+*.DS_Store
+
+# others
+**/__pycache__/
+.idea/
+.vscode/
+
