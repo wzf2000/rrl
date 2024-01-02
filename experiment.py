@@ -21,6 +21,10 @@ def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False
     data_path = os.path.join(DATA_DIR, dataset + '.data')
     info_path = os.path.join(DATA_DIR, dataset + '.info')
     X_df, y_df, f_df, label_pos = read_csv(data_path, info_path, shuffle=True)
+    if dataset == 'OnlineNewsPopularity':
+        X_df = X_df.drop(['n_non_stop_words', 'n_unique_tokens', 'kw_avg_min', 'kw_avg_avg', 'self_reference_avg_sharess'], axis=1)
+    elif dataset == 'RedWineQuality':
+        X_df = X_df[['fixed_acidity', 'volatile_acidity', 'citric_acid', 'chlorides', 'total_sulfur_dioxide', 'density', 'sulphates', 'alcohol']]
 
     db_enc = DBEncoder(f_df, discrete=False, regression=regression)
     db_enc.fit(X_df, y_df)
