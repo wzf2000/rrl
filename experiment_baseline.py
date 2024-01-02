@@ -89,13 +89,20 @@ class MyRidge:
 def train_and_test_ridge_regression_raw(dataset):
     X_train, y_train, X_test, y_test = get_data(dataset)
 
+    log_y_train = np.log(y_train)
+    log_y_test = np.log(y_test)
+
     model = MyRidge(alpha=1)
-    model.fit(X_train, y_train)
-    result = model.predict(X_test)
+    # model.fit(X_train, y_train)
+    model.fit(X_train, log_y_train)
+    # result = model.predict(X_test)
+    log_result = model.predict(X_test)
+    print('LOG RMSE:', np.sqrt(np.mean(np.power(log_y_test - log_result, 2))))
+    print('LOG MAE:', np.mean(np.abs(log_y_test - log_result)))
     
     # add metrics calculation
-    print('RMSE:', np.sqrt(np.mean(np.power(y_test - result, 2))))
-    print('MAE:', np.mean(np.abs(y_test - result)))
+    # print('RMSE:', np.sqrt(np.mean(np.power(y_test - result, 2))))
+    # print('MAE:', np.mean(np.abs(y_test - result)))
     return
 
 
