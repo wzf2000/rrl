@@ -22,9 +22,13 @@ def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False
     info_path = os.path.join(DATA_DIR, dataset + '.info')
     X_df, y_df, f_df, label_pos = read_csv(data_path, info_path, shuffle=True)
     if dataset == 'OnlineNewsPopularity':
-        X_df = X_df.drop(['n_non_stop_words', 'n_unique_tokens', 'kw_avg_min', 'kw_avg_avg', 'self_reference_avg_sharess'], axis=1)
+        remove_cols = ['n_non_stop_words', 'n_unique_tokens', 'kw_avg_min', 'kw_avg_avg', 'self_reference_avg_sharess']
+        X_df = X_df.drop(remove_cols, axis=1)
+        f_df = f_df[~f_df[0].isin(remain_cols)]
     elif dataset == 'RedWineQuality':
-        X_df = X_df[['fixed_acidity', 'volatile_acidity', 'citric_acid', 'chlorides', 'total_sulfur_dioxide', 'density', 'sulphates', 'alcohol']]
+        remain_cols = ['fixed_acidity', 'volatile_acidity', 'citric_acid', 'chlorides', 'total_sulfur_dioxide', 'density', 'sulphates', 'alcohol']
+        X_df = X_df[remain_cols]
+        f_df = f_df[f_df[0].isin(remain_cols)]
 
     db_enc = DBEncoder(f_df, discrete=False, regression=regression)
     db_enc.fit(X_df, y_df)
