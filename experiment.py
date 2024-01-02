@@ -12,17 +12,17 @@ from sklearn.model_selection import KFold, train_test_split
 from collections import defaultdict
 
 from rrl.utils import read_csv, DBEncoder
-from rrl.models import RRL
+from rrl.models import RRL, RRLRegression
 
 DATA_DIR = './dataset'
 
 
-def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False, save_best=True):
+def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False, save_best=True, regression=False):
     data_path = os.path.join(DATA_DIR, dataset + '.data')
     info_path = os.path.join(DATA_DIR, dataset + '.info')
     X_df, y_df, f_df, label_pos = read_csv(data_path, info_path, shuffle=True)
 
-    db_enc = DBEncoder(f_df, discrete=False)
+    db_enc = DBEncoder(f_df, discrete=False, regression=regression)
     db_enc.fit(X_df, y_df)
 
     X, y = db_enc.transform(X_df, y_df, normalized=True, keep_stat=True)
@@ -68,28 +68,45 @@ def train_model(gpu, args):
 
     dataset = args.data_set
     db_enc, train_loader, valid_loader, _ = get_data_loader(dataset, args.world_size, rank, args.batch_size,
-                                                            k=args.ith_kfold, pin_memory=True, save_best=args.save_best)
+                                                            k=args.ith_kfold, pin_memory=True, save_best=args.save_best, regression=args.regression)
 
     X_fname = db_enc.X_fname
     y_fname = db_enc.y_fname
     discrete_flen = db_enc.discrete_flen
     continuous_flen = db_enc.continuous_flen
 
-    rrl = RRL(dim_list=[(discrete_flen, continuous_flen)] + list(map(int, args.structure.split('@'))) + [len(y_fname)],
-              device_id=device_id,
-              use_not=args.use_not,
-              is_rank0=is_rank0,
-              log_file=args.log,
-              writer=writer,
-              save_best=args.save_best,
-              estimated_grad=args.estimated_grad,
-              use_skip=args.skip,
-              save_path=args.model,
-              use_nlaf=args.nlaf,
-              alpha=args.alpha,
-              beta=args.beta,
-              gamma=args.gamma,
-              temperature=args.temp)
+    if args.regression:
+        rrl = RRLRegression(dim_list=[(discrete_flen, continuous_flen)] + list(map(int, args.structure.split('@'))) + [1],
+                            device_id=device_id,
+                            use_not=args.use_not,
+                            is_rank0=is_rank0,
+                            log_file=args.log,
+                            writer=writer,
+                            save_best=args.save_best,
+                            estimated_grad=args.estimated_grad,
+                            use_skip=args.skip,
+                            save_path=args.model,
+                            use_nlaf=args.nlaf,
+                            alpha=args.alpha,
+                            beta=args.beta,
+                            gamma=args.gamma,
+                            temperature=args.temp)
+    else:
+        rrl = RRL(dim_list=[(discrete_flen, continuous_flen)] + list(map(int, args.structure.split('@'))) + [len(y_fname)],
+                device_id=device_id,
+                use_not=args.use_not,
+                is_rank0=is_rank0,
+                log_file=args.log,
+                writer=writer,
+                save_best=args.save_best,
+                estimated_grad=args.estimated_grad,
+                use_skip=args.skip,
+                save_path=args.model,
+                use_nlaf=args.nlaf,
+                alpha=args.alpha,
+                beta=args.beta,
+                gamma=args.gamma,
+                temperature=args.temp)
 
     rrl.train_model(
         data_loader=train_loader,
@@ -102,22 +119,37 @@ def train_model(gpu, args):
         log_iter=args.log_iter)
 
 
-def load_model(path, device_id, log_file=None, distributed=True):
+def load_model(path, device_id, log_file=None, distributed=True, regression=False):
     checkpoint = torch.load(path, map_location='cpu')
     saved_args = checkpoint['rrl_args']
-    rrl = RRL(
-        dim_list=saved_args['dim_list'],
-        device_id=device_id,
-        is_rank0=True,
-        use_not=saved_args['use_not'],
-        log_file=log_file,
-        distributed=distributed,
-        estimated_grad=saved_args['estimated_grad'],
-        use_skip=saved_args['use_skip'],
-        use_nlaf=saved_args['use_nlaf'],
-        alpha=saved_args['alpha'],
-        beta=saved_args['beta'],
-        gamma=saved_args['gamma'])
+    if regression:
+        rrl = RRLRegression(
+            dim_list=saved_args['dim_list'],
+            device_id=device_id,
+            is_rank0=True,
+            use_not=saved_args['use_not'],
+            log_file=log_file,
+            distributed=distributed,
+            estimated_grad=saved_args['estimated_grad'],
+            use_skip=saved_args['use_skip'],
+            use_nlaf=saved_args['use_nlaf'],
+            alpha=saved_args['alpha'],
+            beta=saved_args['beta'],
+            gamma=saved_args['gamma'])
+    else:
+        rrl = RRL(
+            dim_list=saved_args['dim_list'],
+            device_id=device_id,
+            is_rank0=True,
+            use_not=saved_args['use_not'],
+            log_file=log_file,
+            distributed=distributed,
+            estimated_grad=saved_args['estimated_grad'],
+            use_skip=saved_args['use_skip'],
+            use_nlaf=saved_args['use_nlaf'],
+            alpha=saved_args['alpha'],
+            beta=saved_args['beta'],
+            gamma=saved_args['gamma'])
     stat_dict = checkpoint['model_state_dict']
     for key in list(stat_dict.keys()):
         # remove 'module.' prefix
@@ -127,9 +159,9 @@ def load_model(path, device_id, log_file=None, distributed=True):
 
 
 def test_model(args):
-    rrl = load_model(args.model, args.device_ids[0], log_file=args.test_res, distributed=False)
+    rrl = load_model(args.model, args.device_ids[0], log_file=args.test_res, distributed=False, regression=args.regression)
     dataset = args.data_set
-    db_enc, train_loader, _, test_loader = get_data_loader(dataset, 4, 0, args.batch_size, args.ith_kfold, save_best=False)
+    db_enc, train_loader, _, test_loader = get_data_loader(dataset, 4, 0, args.batch_size, args.ith_kfold, save_best=False, regression=args.regression)
     rrl.test(test_loader=test_loader, set_name='Test')
     if args.print_rule:
         with open(args.rrl_file, 'w') as rrl_file:

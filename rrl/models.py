@@ -13,7 +13,7 @@ TEST_CNT_MOD = 500
 
 
 class Net(nn.Module):
-    def __init__(self, dim_list, use_not=False, left=None, right=None, use_nlaf=False, estimated_grad=False, use_skip=True, alpha=0.999, beta=8, gamma=1, temperature=0.01):
+    def __init__(self, dim_list, use_not=False, left=None, right=None, use_nlaf=False, estimated_grad=False, use_skip=True, alpha=0.999, beta=8, gamma=1, temperature=0.01, regression=False):
         super(Net, self).__init__()
 
         self.dim_list = dim_list
@@ -22,7 +22,10 @@ class Net(nn.Module):
         self.right = right
         self.layer_list = nn.ModuleList([])
         self.use_skip = use_skip
-        self.t = nn.Parameter(torch.log(torch.tensor([temperature])))
+        if regression:
+            self.t = None
+        else:
+            self.t = nn.Parameter(torch.log(torch.tensor([temperature])))
 
         prev_layer_dim = dim_list[0]
         for i in range(1, len(dim_list)):
@@ -343,3 +346,157 @@ class RRL:
             print(now_layer.rule_name[rid[1]], end='\n', file=file)
         print('#' * 60, file=file)
         return layer.rule2weights
+
+class RRLRegression(RRL):
+    def __init__(self, dim_list, device_id, use_not=False, is_rank0=False, log_file=None, writer=None, left=None, right=None, save_best=False, estimated_grad=False, save_path=None, distributed=True, use_skip=False, use_nlaf=False, alpha=0.999, beta=8, gamma=1, temperature=0.01):
+        super(RRL, self).__init__()
+        self.dim_list = dim_list
+        self.use_not = use_not
+        self.use_skip = use_skip
+        self.use_nlaf = use_nlaf
+        self.alpha =alpha
+        self.beta = beta
+        self.gamma = gamma
+        self.best_rmse = 1e20
+        self.best_loss = 1e20
+
+        self.device_id = device_id
+        self.is_rank0 = is_rank0
+        self.save_best = save_best
+        self.estimated_grad = estimated_grad
+        self.save_path = save_path
+        if self.is_rank0:
+            for handler in logging.root.handlers[:]:
+                logging.root.removeHandler(handler)
+
+            log_format = '%(asctime)s - [%(levelname)s] - %(message)s'
+            if log_file is None:
+                logging.basicConfig(level=logging.DEBUG, stream=sys.stdout, format=log_format)
+            else:
+                logging.basicConfig(level=logging.DEBUG, filename=log_file, filemode='w', format=log_format)
+        self.writer = writer
+
+        self.net = Net(dim_list, use_not=use_not, left=left, right=right, use_nlaf=use_nlaf, estimated_grad=estimated_grad, use_skip=use_skip, alpha=alpha, beta=beta, gamma=gamma, temperature=temperature, regression=True)
+        self.net.cuda(self.device_id)
+        if distributed:
+            self.net = MyDistributedDataParallel(self.net, device_ids=[self.device_id])
+
+    def train_model(self, data_loader=None, valid_loader=None, epoch=50, lr=0.01, lr_decay_epoch=100, 
+                    lr_decay_rate=0.75, weight_decay=0.0, log_iter=50):
+
+        if data_loader is None:
+            raise Exception("Data loader is unavailable!")
+
+        RMSE_b = []
+        MAE_b = []
+
+        criterion = nn.MSELoss().cuda(self.device_id)
+        optimizer = torch.optim.Adam(self.net.parameters(), lr=lr, weight_decay=0.0)
+
+        cnt = -1
+        avg_batch_loss_rrl = 0.0
+        epoch_histc = defaultdict(list)
+        for epo in range(epoch):
+            optimizer = self.exp_lr_scheduler(optimizer, epo, init_lr=lr, lr_decay_rate=lr_decay_rate,
+                                              lr_decay_epoch=lr_decay_epoch)
+
+            epoch_loss_rrl = 0.0
+            abs_gradient_max = 0.0
+            abs_gradient_avg = 0.0
+
+            ba_cnt = 0
+            for X, y in data_loader:
+                ba_cnt += 1
+                X = X.cuda(self.device_id, non_blocking=True)
+                y = y.cuda(self.device_id, non_blocking=True)
+                optimizer.zero_grad()  # Zero the gradient buffers.
+                
+                y_bar = self.net.forward(X).reshape(-1)
+                
+                loss_rrl = criterion(y_bar, y) + weight_decay * self.l2_penalty()
+                
+                ba_loss_rrl = loss_rrl.item()
+                epoch_loss_rrl += ba_loss_rrl
+                avg_batch_loss_rrl += ba_loss_rrl
+                
+                loss_rrl.backward()
+
+                cnt += 1
+                with torch.no_grad():
+                    if self.is_rank0 and cnt % log_iter == 0 and cnt != 0 and self.writer is not None:
+                        self.writer.add_scalar('Avg_Batch_Loss_GradGrafting', avg_batch_loss_rrl / log_iter, cnt)
+                        edge_p = self.edge_penalty().item()
+                        self.writer.add_scalar('Edge_penalty/Log', np.log(edge_p), cnt)
+                        self.writer.add_scalar('Edge_penalty/Origin', edge_p, cnt)
+                        avg_batch_loss_rrl = 0.0
+
+                optimizer.step()
+                
+                if self.is_rank0:
+                    for i, param in enumerate(self.net.parameters()):
+                        abs_gradient_max = max(abs_gradient_max, abs(torch.max(param.grad)))
+                        abs_gradient_avg += torch.sum(torch.abs(param.grad)) / (param.grad.numel())
+                self.clip()
+
+                if self.is_rank0 and (cnt % (TEST_CNT_MOD * (1 if self.save_best else 10)) == 0):
+                    if valid_loader is not None:
+                        rmse_b, mae_b = self.test(test_loader=valid_loader, set_name='Validation')
+                    else: # use the data_loader as the valid loader
+                        rmse_b, mae_b = self.test(test_loader=data_loader, set_name='Training')
+                    
+                    if self.save_best and (rmse_b > self.best_rmse or (np.abs(rmse_b - self.best_rmse) < 1e-10 and self.best_loss > epoch_loss_rrl)):
+                        self.best_rmse = rmse_b
+                        self.best_loss = epoch_loss_rrl
+                        self.save_model()
+                    
+                    RMSE_b.append(rmse_b)
+                    MAE_b.append(mae_b)
+                    if self.writer is not None:
+                        self.writer.add_scalar('RMSE_RRL', rmse_b, cnt // TEST_CNT_MOD)
+                        self.writer.add_scalar('MAE_RRL', mae_b, cnt // TEST_CNT_MOD)
+            if self.is_rank0:
+                logging.info('epoch: {}, loss_rrl: {}'.format(epo, epoch_loss_rrl))
+                if self.writer is not None:
+                    self.writer.add_scalar('Training_Loss_RRL', epoch_loss_rrl, epo)
+                    self.writer.add_scalar('Abs_Gradient_Max', abs_gradient_max, epo)
+                    self.writer.add_scalar('Abs_Gradient_Avg', abs_gradient_avg / ba_cnt, epo)
+        if self.is_rank0 and not self.save_best:
+            self.save_model()
+        return epoch_histc
+    
+    @torch.no_grad()
+    def test(self, test_loader=None, set_name='Validation'):
+        if test_loader is None:
+            raise Exception("Data loader is unavailable!")
+        
+        y_list = []
+        for X, y in test_loader:
+            y_list.append(y)
+        y_true = torch.cat(y_list, dim=0)
+        y_true = y_true.cpu().numpy().astype(np.float32)
+        data_num = y_true.shape[0]
+
+        slice_step = data_num // 40 if data_num >= 40 else 1
+        logging.debug('y_true: {} {}'.format(y_true.shape, y_true[:: slice_step]))
+
+        y_pred_b_list = []
+        for X, y in test_loader:
+            X = X.cuda(self.device_id, non_blocking=True)
+            output = self.net.forward(X)
+            output = output.reshape(-1)
+            y_pred_b_list.append(output)
+
+        y_pred_b = torch.cat(y_pred_b_list).cpu().numpy()
+        logging.debug('y_rrl: {} {}'.format(y_pred_b.shape, y_pred_b[:: (slice_step)]))
+
+        rmse_b = metrics.mean_squared_error(y_true, y_pred_b, squared=False)
+        mae_b = metrics.mean_absolute_error(y_true, y_pred_b)
+
+        logging.info('-' * 60)
+        logging.info('On {} Set:\n\tRMSE of RRL  Model: {}'
+                        '\n\tMAE of RRL  Model: {}'.format(set_name, rmse_b, mae_b))
+        logging.info('On {} Set:\nR2 Performance of  RRL Model: \n{}'.format(
+            set_name, metrics.r2_score(y_true, y_pred_b)))
+        logging.info('-' * 60)
+
+        return rmse_b, mae_b
