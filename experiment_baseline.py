@@ -45,7 +45,9 @@ def train_and_test_decision_tree_regression(dataset):
     result = model.predict(X_test)
     
     # add metrics calculation
-    print(np.mean(np.abs(y_test - result)))
+    print('RMSE:', np.sqrt(np.mean(np.power(y_test - result, 2))))
+    print('MAE:', np.mean(np.abs(y_test - result)))
+    breakpoint()
     return
 
 from sklearn.linear_model import Ridge
@@ -57,12 +59,13 @@ def train_and_test_ridge_regression(dataset):
     result = model.predict(X_test)
     
     # add metrics calculation
-    print(np.mean(np.abs(y_test - result)))
+    print('RMSE:', np.sqrt(np.mean(np.power(y_test - result, 2))))
+    print('MAE:', np.mean(np.abs(y_test - result)))
     return
 
 
 class MyRidge:
-    def __init__(self, alpha=1, n_iters=1000, lr=1e-4):
+    def __init__(self, alpha=1, n_iters=1000, lr=1e-5):
         self.alpha = alpha
         self.n_iters = n_iters
         self.lr = lr
@@ -91,7 +94,8 @@ def train_and_test_ridge_regression_raw(dataset):
     result = model.predict(X_test)
     
     # add metrics calculation
-    print(np.mean(np.abs(y_test - result)))
+    print('RMSE:', np.sqrt(np.mean(np.power(y_test - result, 2))))
+    print('MAE:', np.mean(np.abs(y_test - result)))
     return
 
 

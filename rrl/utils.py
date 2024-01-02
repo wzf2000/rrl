@@ -8,7 +8,7 @@ def read_info(info_path):
     with open(info_path) as f:
         f_list = []
         for line in f:
-            tokens = line.strip().split()
+            tokens = line.strip().rsplit(' ', 1)
             f_list.append(tokens)
     return f_list[:-1], int(f_list[-1][-1])
 
@@ -65,7 +65,7 @@ class DBEncoder:
             # One-hot encoding
             self.feature_enc.fit(discrete_data)
             feature_names = discrete_data.columns
-            self.X_fname = list(self.feature_enc.get_feature_names(feature_names))
+            self.X_fname = list(self.feature_enc.get_feature_names_out(feature_names))
             self.discrete_flen = len(self.X_fname)
             if not self.discrete:
                 self.X_fname.extend(continuous_data.columns)
