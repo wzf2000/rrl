@@ -26,6 +26,8 @@ def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False
     db_enc.fit(X_df, y_df)
 
     X, y = db_enc.transform(X_df, y_df, normalized=True, keep_stat=True)
+    if dataset == 'OnlineNewsPopularity':
+        y = np.log(y)
 
     kf = KFold(n_splits=5, shuffle=True, random_state=0)
     train_index, test_index = list(kf.split(X_df))[k]
