@@ -196,7 +196,8 @@ def test_model(args):
 def train_main(args):
     os.environ['MASTER_ADDR'] = args.master_address
     os.environ['MASTER_PORT'] = args.master_port
-    mp.spawn(train_model, nprocs=args.gpus, args=(args,))
+    train_model(0, args)
+    # mp.spawn(train_model, nprocs=args.gpus, args=(args,))
 
 
 if __name__ == '__main__':
