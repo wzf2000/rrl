@@ -24,7 +24,7 @@ def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False
     if dataset == 'OnlineNewsPopularity':
         remove_cols = ['n_unique_tokens', 'n_non_stop_words', 'n_non_stop_unique_tokens', 'kw_max_max', 'global_rate_negative_words', 'rate_positive_words', 'abs_title_subjectivity']
         X_df = X_df.drop(remove_cols, axis=1)
-        f_df = f_df[~f_df[0].isin(remain_cols)]
+        f_df = f_df[~f_df[0].isin(remove_cols)]
     elif dataset == 'RedWineQuality':
         remain_cols = ['fixed_acidity', 'volatile_acidity', 'citric_acid', 'chlorides', 'total_sulfur_dioxide', 'density', 'sulphates', 'alcohol']
         X_df = X_df[remain_cols]
