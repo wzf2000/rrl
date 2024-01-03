@@ -444,7 +444,7 @@ class RRLRegression(RRL):
                     else: # use the data_loader as the valid loader
                         rmse_b, mae_b = self.test(test_loader=data_loader, set_name='Training')
                     
-                    if self.save_best and (rmse_b > self.best_rmse or (np.abs(rmse_b - self.best_rmse) < 1e-10 and self.best_loss > epoch_loss_rrl)):
+                    if self.save_best and (rmse_b < self.best_rmse or (np.abs(rmse_b - self.best_rmse) < 1e-10 and self.best_loss > epoch_loss_rrl)):
                         self.best_rmse = rmse_b
                         self.best_loss = epoch_loss_rrl
                         self.save_model()

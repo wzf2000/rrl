@@ -22,7 +22,7 @@ def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False
     info_path = os.path.join(DATA_DIR, dataset + '.info')
     X_df, y_df, f_df, label_pos = read_csv(data_path, info_path, shuffle=True)
     if dataset == 'OnlineNewsPopularity':
-        remove_cols = ['n_non_stop_words', 'n_unique_tokens', 'kw_avg_min', 'kw_avg_avg', 'self_reference_avg_sharess']
+        remove_cols = ['n_unique_tokens', 'n_non_stop_words', 'n_non_stop_unique_tokens', 'kw_max_max', 'global_rate_negative_words', 'rate_positive_words', 'abs_title_subjectivity']
         X_df = X_df.drop(remove_cols, axis=1)
         f_df = f_df[~f_df[0].isin(remain_cols)]
     elif dataset == 'RedWineQuality':
