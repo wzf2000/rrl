@@ -10,6 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torch.multiprocessing as mp
 import torch.distributed as dist
 from sklearn.model_selection import KFold, train_test_split
+from sklearn import metrics
 from collections import defaultdict
 
 from rrl.utils import read_csv, DBEncoder
@@ -22,7 +23,17 @@ def get_data(dataset, k=0):
     data_path = os.path.join(DATA_DIR, dataset + '.data')
     info_path = os.path.join(DATA_DIR, dataset + '.info')
     X_df, y_df, f_df, label_pos = read_csv(data_path, info_path, shuffle=True)
-    
+    if dataset == 'RedwineQuality':
+        remain_cols = ['fixed_acidity', 'volatile_acidity', 'citric_acid', 'chlorides', 'total_sulfur_dioxide', 'density', 'sulphates', 'alcohol']
+        X_df = X_df[remain_cols]
+        f_df = f_df[f_df[0].isin(remain_cols)]
+    elif dataset == 'OnlineNewsPopularity':
+        del_cols = ['n_unique_tokens', 'n_non_stop_words', 'n_non_stop_unique_tokens', 'kw_max_max', 'global_rate_negative_words', 'rate_positive_words', 'abs_title_subjectivity']
+        remain_cols = X_df.columns.tolist()
+        remain_cols = [col for col in remain_cols if col not in del_cols]
+        X_df = X_df[remain_cols]
+        f_df = f_df[f_df[0].isin(remain_cols)]
+
     db_enc = DBEncoder(f_df, discrete=False)
     db_enc.fit(X_df, y_df)
 
@@ -47,7 +58,7 @@ def train_and_test_decision_tree_regression(dataset):
     # add metrics calculation
     print('RMSE:', np.sqrt(np.mean(np.power(y_test - result, 2))))
     print('MAE:', np.mean(np.abs(y_test - result)))
-    breakpoint()
+    print('R2:', metrics.r2_score(y_test, result))
     return
 
 from sklearn.linear_model import Ridge
@@ -61,6 +72,7 @@ def train_and_test_ridge_regression(dataset):
     # add metrics calculation
     print('RMSE:', np.sqrt(np.mean(np.power(y_test - result, 2))))
     print('MAE:', np.mean(np.abs(y_test - result)))
+    print('R2:', metrics.r2_score(y_test, result))
     return
 
 
@@ -104,7 +116,7 @@ def train_and_test_ridge_regression_raw(dataset):
     # add metrics calculation
     print('RMSE:', np.sqrt(np.mean(np.power(y_test - result, 2))))
     print('MAE:', np.mean(np.abs(y_test - result)))
-    print('R2:', 1 - np.sum(np.power(y_test - result, 2)) / np.sum(np.power(y_test - np.mean(y_test), 2)))
+    print('R2:', metrics.r2_score(y_test, result))
     return
 
 
