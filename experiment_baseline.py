@@ -34,7 +34,7 @@ def get_data(dataset, k=0):
         X_df = X_df[remain_cols]
         f_df = f_df[f_df[0].isin(remain_cols)]
 
-    db_enc = DBEncoder(f_df, discrete=False)
+    db_enc = DBEncoder(f_df, discrete=False, regression=True)
     db_enc.fit(X_df, y_df)
 
     X, y = db_enc.transform(X_df, y_df, normalized=True, keep_stat=True)
