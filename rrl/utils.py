@@ -8,7 +8,7 @@ def read_info(info_path):
     with open(info_path) as f:
         f_list = []
         for line in f:
-            tokens = line.strip().split()
+            tokens = line.strip().rsplit(' ', 1)
             f_list.append(tokens)
     return f_list[:-1], int(f_list[-1][-1])
 
