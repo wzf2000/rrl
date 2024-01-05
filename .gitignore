@@ -1,0 +1,5 @@
+__pycache__
+log_folder
+dataset/*
+!dataset/README.md
+!dataset/tic-tac-toe.*
