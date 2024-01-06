@@ -54,7 +54,7 @@ def get_data_loader(dataset, world_size, rank, batch_size, k=0, pin_memory=False
 
 def train_model(gpu, args):
     rank = args.nr * args.gpus + gpu
-    dist.init_process_group(backend='nccl', init_method='env://', world_size=args.world_size, rank=rank)
+    # dist.init_process_group(backend='nccl', init_method='env://', world_size=args.world_size, rank=rank)
     torch.manual_seed(42)
     device_id = args.device_ids[gpu]
     torch.cuda.set_device(device_id)
@@ -85,6 +85,7 @@ def train_model(gpu, args):
               estimated_grad=args.estimated_grad,
               use_skip=args.skip,
               save_path=args.model,
+              distributed=False,
               use_nlaf=args.nlaf,
               alpha=args.alpha,
               beta=args.beta,
@@ -118,10 +119,10 @@ def load_model(path, device_id, log_file=None, distributed=True):
         alpha=saved_args['alpha'],
         beta=saved_args['beta'],
         gamma=saved_args['gamma'])
-    stat_dict = checkpoint['model_state_dict']
-    for key in list(stat_dict.keys()):
-        # remove 'module.' prefix
-        stat_dict[key[7:]] = stat_dict.pop(key)
+    # stat_dict = checkpoint['model_state_dict']
+    # for key in list(stat_dict.keys()):
+    #     # remove 'module.' prefix
+    #     stat_dict[key[7:]] = stat_dict.pop(key)
     rrl.net.load_state_dict(checkpoint['model_state_dict'])
     return rrl
 
@@ -162,14 +163,15 @@ def test_model(args):
 
 
 def train_main(args):
-    os.environ['MASTER_ADDR'] = args.master_address
-    os.environ['MASTER_PORT'] = args.master_port
-    mp.spawn(train_model, nprocs=args.gpus, args=(args,))
+    # os.environ['MASTER_ADDR'] = args.master_address
+    # os.environ['MASTER_PORT'] = args.master_port
+    train_model(0, args)
+    # mp.spawn(train_model, nprocs=args.gpus, args=(args,))
 
 
 if __name__ == '__main__':
     from args import rrl_args
     # for arg in vars(rrl_args):
     #     print(arg, getattr(rrl_args, arg))
-    train_main(rrl_args)
+    # train_main(rrl_args)
     test_model(rrl_args)
