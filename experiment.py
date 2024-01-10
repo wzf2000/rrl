@@ -173,5 +173,5 @@ if __name__ == '__main__':
     from args import rrl_args
     # for arg in vars(rrl_args):
     #     print(arg, getattr(rrl_args, arg))
-    # train_main(rrl_args)
+    train_main(rrl_args)
     test_model(rrl_args)
