@@ -1,5 +1,31 @@
 __pycache__
-log_folder
-dataset/*
+
+# raw data
+*.data
+*.info
+*.csv
+*.names
+*.txt
+dataset/bank/bank+marketing/
+
 !dataset/README.md
 !dataset/tic-tac-toe.*
+
+# logs
+*.log
+*.pkl
+*.pickle
+
+
+# uncompressed dataset files
+*.tar.gz
+*.DS_Store
+
+# others
+**/__pycache__/
+.idea/
+.vscode/
+
+log_folder
+
+*.zip
