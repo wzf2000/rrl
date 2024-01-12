@@ -283,7 +283,7 @@ class RRL:
         logging.info('On {} Set:\n\tAccuracy of RRL  Model: {}'
                         '\n\tF1 Score of RRL  Model: {}'.format(set_name, accuracy_b, f1_score_b))
         logging.info('On {} Set:\nPerformance of  RRL Model: \n{}\n{}'.format(
-            set_name, metrics.confusion_matrix(y_true, y_pred_b_arg), metrics.classification_report(y_true, y_pred_b_arg)))
+            set_name, metrics.confusion_matrix(y_true, y_pred_b_arg), metrics.classification_report(y_true, y_pred_b_arg, digits=4)))
         logging.info('-' * 60)
 
         return accuracy_b, f1_score_b
